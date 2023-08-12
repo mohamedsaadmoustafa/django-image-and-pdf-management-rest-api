@@ -1,0 +1,19 @@
+import pdfplumber
+import datetime
+
+
+def extract_pdf_details(pdf_file):
+    with pdfplumber.open(pdf_file) as pdf:
+        title = pdf.metadata['Title']
+        author = pdf.metadata['Author']
+        num_pages = len(pdf.pages)
+        page_width = pdf.pages[0].width
+        page_height = pdf.pages[0].height
+
+        return {
+            'title': title,
+            'author': author,
+            'num_pages': num_pages,
+            'page_width': page_width,
+            'page_height': page_height,
+        }

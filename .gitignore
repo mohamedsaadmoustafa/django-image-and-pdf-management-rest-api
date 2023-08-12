@@ -1,0 +1,6 @@
+/media
+/hello/__pycache__
+/hello/migrations
+/utils/__pycache__
+/web_project/__pycache__
+/.venv
