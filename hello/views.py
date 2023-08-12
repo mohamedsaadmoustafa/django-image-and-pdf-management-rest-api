@@ -1,29 +1,23 @@
 import logging, os
+
+from django.http import HttpResponse
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FileUploadParser
+from rest_framework.parsers import MultiPartParser
 from rest_framework import status
-from django.core.files.uploadhandler import TemporaryFileUploadHandler
-from django.db import transaction
 from pdf2image import convert_from_path, convert_from_bytes
 from PIL import Image as PILImage
-from base64 import b64encode
-from django.http import HttpResponse
-from io import BytesIO
+
 from .models import Image, Pdf
 from .serializers import ImageSerializer, PdfSerializer
 from utils.extract_image_details import extract_image_details
 from utils.extract_pdf_details import extract_pdf_details
 from utils.base64_encoded_image import base64_encoded_image
-# Create and configure logger
-logging.basicConfig(filename="newfile.log",
-                    format='%(asctime)s %(message)s',
-                    filemode='w')
-# Creating an object
-logger = logging.getLogger()
-# Setting the threshold of logger to DEBUG
-logger.setLevel(logging.DEBUG)
 
+
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
 
 class UploadView(APIView):
     parser_classes = (MultiPartParser,)
