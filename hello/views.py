@@ -34,12 +34,17 @@ class UploadView(APIView):
             if image_exists:
                 logger.warning("Image with the same file already exists")
                 return Response('Image with the same file already exists', status=status.HTTP_400_BAD_REQUEST)
-
             image_details = extract_image_details(file)
+
+            # Validate image dimensions
+            if image_details['width'] > 1000 or image_details['height'] > 1000:
+                err = f"Image dimensions must be less than 1000x1000.\nImage dimensions: {image_details}"
+                logger.warning(err)
+                return Response(err, status=status.HTTP_400_BAD_REQUEST)
+
             image = Image(file=file, **image_details)
             image.save()
             logger.info(f"Image with name {file} saves successfully")
-
             serializer = ImageSerializer(image)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -49,8 +54,14 @@ class UploadView(APIView):
             if pdf_exists:
                 logger.warning("Pdf with the same file already exists")
                 return Response('Pdf with the same file already exists', status=status.HTTP_400_BAD_REQUEST)
-
             pdf_details = extract_pdf_details(file)
+
+            # Validate pdf file size
+            if file.size > 10000000:
+                err = f"Pdf file size must be less than 10MB.\nFile size: {file.size}"
+                logger.warning(err)
+                return Response(err, status=status.HTTP_400_BAD_REQUEST)
+
             pdf = Pdf(file=file, **pdf_details)
             pdf.save()
             logger.info(f"Pdf with name {file} saves successfully")
@@ -138,7 +149,7 @@ class PdfToImageView(APIView):
     def post(self, request, format=None):
         id = request.POST.get('id')
         pdf_file = Pdf.objects.get(pk=id)
-        pdf_file_bytes = pdf_file.file.read()
+        pdf_file_bytes = pdf_file.file.read() 
 
         try:
             pdf_images = convert_from_bytes(pdf_file_bytes)
