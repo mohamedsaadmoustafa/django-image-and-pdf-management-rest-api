@@ -4,8 +4,14 @@ import datetime
 
 def extract_pdf_details(pdf_file):
     with pdfplumber.open(pdf_file) as pdf:
-        title = pdf.metadata['Title']
-        author = pdf.metadata['Author']
+        try:
+            title = pdf.metadata['Title']
+        except:
+            title = ""
+        try:
+            author = pdf.metadata['Author']
+        except:
+            author = ""
         num_pages = len(pdf.pages)
         page_width = pdf.pages[0].width
         page_height = pdf.pages[0].height

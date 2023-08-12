@@ -5,7 +5,7 @@ from rest_framework.parsers import MultiPartParser, FileUploadParser
 from rest_framework import status
 from django.core.files.uploadhandler import TemporaryFileUploadHandler
 from django.db import transaction
-from pdf2image import convert_from_path
+from pdf2image import convert_from_path, convert_from_bytes
 from PIL import Image as PILImage
 from base64 import b64encode
 from django.http import HttpResponse
@@ -14,7 +14,7 @@ from .models import Image, Pdf
 from .serializers import ImageSerializer, PdfSerializer
 from utils.extract_image_details import extract_image_details
 from utils.extract_pdf_details import extract_pdf_details
-
+from utils.base64_encoded_image import base64_encoded_image
 # Create and configure logger
 logging.basicConfig(filename="newfile.log",
                     format='%(asctime)s %(message)s',
@@ -130,35 +130,28 @@ class PdfDeleteView(APIView):
 class ImageRotationView(APIView):
     def post(self, request, format=None):
         id = request.POST.get('id')
-        print(id)
         degree = request.POST.get('rotation_angle')
         image_file = Image.objects.get(pk=id).file
 
-        # TODO: image rotation to utils
         image = PILImage.open(image_file)
-        rotated_image = image.rotate(int(degree))  # Rotate the image by 90 degrees clockwise
-        # Convert the rotated image to base64-encoded string
-        buffered = BytesIO()
-        rotated_image.save(buffered, format='JPEG')
-        base64_encoded_image = b64encode(buffered.getvalue()).decode()
-        # Create the response with the base64-encoded image
-        response = HttpResponse(base64_encoded_image, content_type='image/jpeg')
+        rotated_image = image.rotate(int(degree))
+        base64_encoded = base64_encoded_image(rotated_image)
+        response = HttpResponse(base64_encoded, content_type='image/png')
         return response
 
 
 class PdfToImageView(APIView):
     def post(self, request, format=None):
         id = request.POST.get('id')
-        pdf_file = Image.objects.get(pk=id).file
+        pdf_file = Pdf.objects.get(pk=id)
+        pdf_file_bytes = pdf_file.file.read()
 
-        pdf_images = convert_from_path(pdf_file.file.path)
+        try:
+            pdf_images = convert_from_bytes(pdf_file_bytes)
+            image = pdf_images[0]
+            base64_encoded = base64_encoded_image(image)
+            return Response(base64_encoded, content_type='image/png')
 
-        # Convert the rotated image to base64-encoded string
-        buffered = BytesIO()
-        pdf_images.save(buffered, format='JPEG')
-        base64_encoded_image = b64encode(buffered.getvalue()).decode()
-        # Create the response with the base64-encoded image
-        response = HttpResponse(base64_encoded_image, content_type='image/jpeg')
-        return response
-
-
+        except Exception as e:
+            err = f"Unable to convert PDF to image.\n {e}"
+            return Response(err, status=status.HTTP_400_BAD_REQUEST)
