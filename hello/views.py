@@ -1,6 +1,7 @@
 import logging, os
 
 from django.http import HttpResponse
+from django.core.files.storage import default_storage
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -11,9 +12,9 @@ from PIL import Image as PILImage
 
 from .models import Image, Pdf
 from .serializers import ImageSerializer, PdfSerializer
-from utils.extract_image_details import extract_image_details
-from utils.extract_pdf_details import extract_pdf_details
+from utils.extract_details import *
 from utils.base64_encoded_image import base64_encoded_image
+from utils.validation import *
 
 
 # Get an instance of a logger
@@ -28,16 +29,26 @@ class UploadView(APIView):
             logger.warning("No file specified for upload request")
             return Response('No file specified for upload request', status=status.HTTP_400_BAD_REQUEST)
 
+        if not validate_file_type(file):
+            logger.warning("Invalid file type.")
+            return Response('Invalid file type.', status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+
+        if not validate_file_size(file):
+            logger.warning("File size is too large.")
+            return Response('File size is too large.', status=status.HTTP_413_PAYLOAD_TOO_LARGE)
+
         if file.content_type.startswith('image'):
             # Check if image is already present
             image_exists = Image.objects.filter(file=file).exists()
+            # ToDo: fix -> check if image exists
             if image_exists:
                 logger.warning("Image with the same file already exists")
                 return Response('Image with the same file already exists', status=status.HTTP_400_BAD_REQUEST)
+
             image_details = extract_image_details(file)
 
             # Validate image dimensions
-            if image_details['width'] > 1000 or image_details['height'] > 1000:
+            if not validate_image_dimensions(image_details):
                 err = f"Image dimensions must be less than 1000x1000.\nImage dimensions: {image_details}"
                 logger.warning(err)
                 return Response(err, status=status.HTTP_400_BAD_REQUEST)
@@ -51,16 +62,12 @@ class UploadView(APIView):
         elif file.content_type.startswith('application/pdf'):
             # Check if pdf is already present
             pdf_exists = Image.objects.filter(file=file).exists()
+
+            # ToDo: fix -> check if pdf exists
             if pdf_exists:
                 logger.warning("Pdf with the same file already exists")
                 return Response('Pdf with the same file already exists', status=status.HTTP_400_BAD_REQUEST)
             pdf_details = extract_pdf_details(file)
-
-            # Validate pdf file size
-            if file.size > 10000000:
-                err = f"Pdf file size must be less than 10MB.\nFile size: {file.size}"
-                logger.warning(err)
-                return Response(err, status=status.HTTP_400_BAD_REQUEST)
 
             pdf = Pdf(file=file, **pdf_details)
             pdf.save()
@@ -88,36 +95,36 @@ class PdfView(APIView):
 
 class ImageDetailsView(APIView):
     def get(self, request, pk, format=None):
-        image = Image.objects.get(pk=pk)
-        serializer = ImageSerializer(image)
-        return Response(serializer.data)
+        try:
+            image = Image.objects.get(pk=pk)
+            serializer = ImageSerializer(image)
+            return Response(serializer.data)
+        except Image.DoesNotExist:
+            return Response('Image not found.', status=status.HTTP_404_NOT_FOUND)
 
-
-class PdfDetailsView(APIView):
-    def get(self, request, pk, format=None):
-        pdf = Pdf.objects.get(pk=pk)
-        serializer = PdfSerializer(pdf)
-        return Response(serializer.data)
-
-
-class ImageDeleteView(APIView):
     def delete(self, request, pk, format=None):
         try:
             image = Image.objects.get(pk=pk)
             image_path = image.file.path
-            print("image_path: ", image_path)
-            logger.warning(image_path)
             image.delete()
 
             # Delete the file from media storage
-            if os.path.isfile(image_path):
-                os.remove(image_path)
+            if default_storage.exists(image_path):
+                default_storage.delete(image_path)
 
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response('Image deleted successfully.', status=status.HTTP_204_NO_CONTENT)
         except Image.DoesNotExist:
-            return Response('Image not found', status=status.HTTP_404_NOT_FOUND)
+            return Response('Image not found.', status=status.HTTP_404_NOT_FOUND)
 
-class PdfDeleteView(APIView):
+class PdfDetailsView(APIView):
+    def get(self, request, pk, format=None):
+        try:
+            pdf = Pdf.objects.get(pk=pk)
+            serializer = PdfSerializer(pdf)
+            return Response(serializer.data)
+        except Pdf.DoesNotExist:
+            return Response('Pdf not found.', status=status.HTTP_404_NOT_FOUND)
+
     def delete(self, request, pk, format=None):
         try:
             pdf = Pdf.objects.get(pk=pk)
@@ -125,12 +132,12 @@ class PdfDeleteView(APIView):
             pdf.delete()
 
             # Delete the file from media storage
-            if os.path.isfile(pdf_path):
-                os.remove(pdf_path)
+            if default_storage.exists(pdf_path):
+                default_storage.delete(pdf_path)
 
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response('Pdf deleted successfully.', status=status.HTTP_204_NO_CONTENT)
         except Pdf.DoesNotExist:
-            return Response('PDF not found', status=status.HTTP_404_NOT_FOUND)
+            return Response('Pdf not found.', status=status.HTTP_404_NOT_FOUND)
 
 
 class ImageRotationView(APIView):

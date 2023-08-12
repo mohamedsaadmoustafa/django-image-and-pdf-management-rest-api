@@ -1,5 +1,5 @@
 from django.db import models
-
+import os
 
 class Image(models.Model):
     id = models.AutoField(primary_key=True)
@@ -24,3 +24,4 @@ class Pdf(models.Model):
 
     def __str__(self):
         return f'{self.id} - {self.file} - {self.title} - {self.author} - {self.num_pages} - ({self.page_width}, {self.page_height})'
+

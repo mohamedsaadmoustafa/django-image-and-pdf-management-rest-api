@@ -1,19 +1,19 @@
 from django.urls import path
-from . import views
+from .views import *
 
 
 urlpatterns = [
-    path('upload/', views.UploadView.as_view()),
+    path('upload/', UploadView.as_view(), name='upload'),
 
-    path('images/', views.ImageView.as_view()),
-    path('images/<int:pk>/', views.ImageDetailsView.as_view()),
+    path('images/', ImageView.as_view(), name='image-list'),
+    path('pdfs/', PdfView.as_view(), name='pdf-list'),
 
-    path('pdfs/', views.PdfView.as_view()),
-    path('pdfs/<int:pk>/', views.PdfDetailsView.as_view()),
+    path('images/<int:pk>/', ImageDetailsView.as_view(), name='image-details'),
+    path('pdfs/<int:pk>/', PdfDetailsView.as_view(), name='pdf-details'),
 
-    path('images/<int:pk>/delete/', views.ImageDeleteView.as_view()),
-    path('pdfs/<int:pk>/delete/', views.PdfDeleteView.as_view()),
+    path('images/<int:pk>/', ImageDetailsView.as_view(), name='image-delete'),
+    path('pdfs/<int:pk>/', PdfDetailsView.as_view(), name='pdf-delete'),
 
-    path('rotate/', views.ImageRotationView.as_view()),
-    path('convert-pdf-to-image/', views.PdfToImageView.as_view()),
+    path('rotate/', ImageRotationView.as_view(), name='image-rotate'),
+    path('convert-pdf-to-image/', PdfToImageView.as_view(), name='pdf-to-image'),
 ]

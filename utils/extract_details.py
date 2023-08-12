@@ -1,3 +1,4 @@
+import PIL
 import pdfplumber
 import datetime
 
@@ -22,4 +23,15 @@ def extract_pdf_details(pdf_file):
             'num_pages': num_pages,
             'page_width': page_width,
             'page_height': page_height,
+        }
+
+
+def extract_image_details(image):
+        img = PIL.Image.open(image)
+        width, height = img.size
+        channels = img.mode
+        return {
+                "width": width,
+                "height": height,
+                "channels": channels
         }
