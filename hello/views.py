@@ -106,6 +106,7 @@ class ImageDeleteView(APIView):
             image = Image.objects.get(pk=pk)
             image_path = image.file.path
             print("image_path: ", image_path)
+            logger.warning(image_path)
             image.delete()
 
             # Delete the file from media storage
@@ -149,7 +150,7 @@ class PdfToImageView(APIView):
     def post(self, request, format=None):
         id = request.POST.get('id')
         pdf_file = Pdf.objects.get(pk=id)
-        pdf_file_bytes = pdf_file.file.read() 
+        pdf_file_bytes = pdf_file.file.read()
 
         try:
             pdf_images = convert_from_bytes(pdf_file_bytes)
