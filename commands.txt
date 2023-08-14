@@ -1,0 +1,2 @@
+docker build --tag django-image-and-pdf-management-rest-api .
+docker run --publish 8000:8000 django-image-and-pdf-management-rest-api
