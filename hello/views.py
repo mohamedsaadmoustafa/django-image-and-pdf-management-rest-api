@@ -1,19 +1,19 @@
-import logging, os
+import logging
 
 from django.http import HttpResponse
 from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import InMemoryUploadedFile
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser
 from rest_framework import status
-from pdf2image import convert_from_path, convert_from_bytes
-from PIL import Image as PILImage
 
 from .models import Image, Pdf
 from .serializers import ImageSerializer, PdfSerializer
+
 from utils.extract_details import *
-from utils.base64_encoded_image import base64_encoded_image
+from utils.file_converter import *
 from utils.validation import *
 
 
@@ -24,60 +24,29 @@ class UploadView(APIView):
     parser_classes = (MultiPartParser,)
 
     def post(self, request, format=None):
-        file = request.FILES.get('file')
-        if not file:
-            logger.warning("No file specified for upload request")
-            return Response('No file specified for upload request', status=status.HTTP_400_BAD_REQUEST)
+        data = request.POST
+        base64_string = data.get("base64_string")
 
-        if not validate_file_type(file):
-            logger.warning("Invalid file type.")
-            return Response('Invalid file type.', status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
+        file, file_extension, data_string = decode_base64_string(base64_string)
 
-        if not validate_file_size(file):
-            logger.warning("File size is too large.")
-            return Response('File size is too large.', status=status.HTTP_413_PAYLOAD_TOO_LARGE)
-
-        if file.content_type.startswith('image'):
-            # Check if image is already present
-            image_exists = Image.objects.filter(file=file).exists()
-            # ToDo: fix -> check if image exists
-            if image_exists:
-                logger.warning("Image with the same file already exists")
-                return Response('Image with the same file already exists', status=status.HTTP_400_BAD_REQUEST)
-
+        if file_extension.lower() in ["jpg", "jpeg", "png"]:
             image_details = extract_image_details(file)
 
-            # Validate image dimensions
-            if not validate_image_dimensions(image_details):
-                err = f"Image dimensions must be less than 1000x1000.\nImage dimensions: {image_details}"
-                logger.warning(err)
-                return Response(err, status=status.HTTP_400_BAD_REQUEST)
-
-            image = Image(file=file, **image_details)
+            image = Image(file=base64_string, **image_details)
             image.save()
-            logger.info(f"Image with name {file} saves successfully")
             serializer = ImageSerializer(image)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        elif file.content_type.startswith('application/pdf'):
-            # Check if pdf is already present
-            pdf_exists = Image.objects.filter(file=file).exists()
-
-            # ToDo: fix -> check if pdf exists
-            if pdf_exists:
-                logger.warning("Pdf with the same file already exists")
-                return Response('Pdf with the same file already exists', status=status.HTTP_400_BAD_REQUEST)
+        elif file_extension == 'pdf':
             pdf_details = extract_pdf_details(file)
 
-            pdf = Pdf(file=file, **pdf_details)
+            pdf = Pdf(file=base64_string, **pdf_details)
             pdf.save()
-            logger.info(f"Pdf with name {file} saves successfully")
             serializer = PdfSerializer(pdf)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         else:
             return Response('Invalid file type.', status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
-
 
 class ImageView(APIView):
     def get(self, request, format=None):
@@ -105,12 +74,12 @@ class ImageDetailsView(APIView):
     def delete(self, request, pk, format=None):
         try:
             image = Image.objects.get(pk=pk)
-            image_path = image.file.path
+            # image_path = image.file.path
             image.delete()
 
-            # Delete the file from media storage
-            if default_storage.exists(image_path):
-                default_storage.delete(image_path)
+            # # Delete the file from media storage
+            # if default_storage.exists(image_path):
+            #     default_storage.delete(image_path)
 
             return Response('Image deleted successfully.', status=status.HTTP_204_NO_CONTENT)
         except Image.DoesNotExist:
@@ -131,9 +100,9 @@ class PdfDetailsView(APIView):
             pdf_path = pdf.file.path
             pdf.delete()
 
-            # Delete the file from media storage
-            if default_storage.exists(pdf_path):
-                default_storage.delete(pdf_path)
+            # # Delete the file from media storage
+            # if default_storage.exists(pdf_path):
+            #     default_storage.delete(pdf_path)
 
             return Response('Pdf deleted successfully.', status=status.HTTP_204_NO_CONTENT)
         except Pdf.DoesNotExist:
@@ -144,27 +113,47 @@ class ImageRotationView(APIView):
     def post(self, request, format=None):
         id = request.POST.get('id')
         degree = request.POST.get('rotation_angle')
-        image_file = Image.objects.get(pk=id).file
+        if not id:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
 
-        image = PILImage.open(image_file)
-        rotated_image = image.rotate(int(degree))
-        base64_encoded = base64_encoded_image(rotated_image)
-        response = HttpResponse(base64_encoded, content_type='image/png')
-        return response
+        try:
+            degree = int(degree)
+        except ValueError:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+        image_row = Image.objects.get(pk=id)
+        if not image_row:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        base64_string = image_row.file
+        image = decode_base64_string(base64_string)[0]
+        image = PIL.Image.open(image)
+        rotated_image = image.rotate(degree)
+        return Response(PostImage(rotated_image))
+
 
 
 class PdfToImageView(APIView):
     def post(self, request, format=None):
         id = request.POST.get('id')
+        if not id:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
         pdf_file = Pdf.objects.get(pk=id)
-        pdf_file_bytes = pdf_file.file.read()
+        if not pdf_file:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
         try:
-            pdf_images = convert_from_bytes(pdf_file_bytes)
-            image = pdf_images[0]
-            base64_encoded = base64_encoded_image(image)
-            return Response(base64_encoded, content_type='image/png')
-
+            pdf_base64_string = pdf_file.file
+            pdf_file, file_extension, data_string = decode_base64_string(pdf_base64_string)
+            pdf_images = pdf_bytes_to_image(pdf_file)
         except Exception as e:
             err = f"Unable to convert PDF to image.\n {e}"
-            return Response(err, status=status.HTTP_400_BAD_REQUEST)
+            return Response(err, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if pdf_images:
+            image = pdf_images[0]
+            base64_encoded = PostImage(image)
+            return Response(base64_encoded)
+        else:
+            return Response(status=status.HTTP_400_BAD_REQUEST)

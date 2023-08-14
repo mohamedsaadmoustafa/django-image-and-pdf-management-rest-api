@@ -3,7 +3,8 @@ import os
 
 class Image(models.Model):
     id = models.AutoField(primary_key=True)
-    file = models.FileField(upload_to='images/')
+    # file = models.FileField(upload_to='images/')
+    file = models.CharField(max_length=100000)
     width = models.IntegerField()
     height = models.IntegerField()
     channels = models.CharField(max_length=10)
@@ -14,7 +15,8 @@ class Image(models.Model):
 
 class Pdf(models.Model):
     id = models.AutoField(primary_key=True)
-    file = models.FileField(upload_to='pdfs/')
+    # file = models.FileField(upload_to='pdfs/')
+    file = models.CharField(max_length=100000)
     title = models.CharField(max_length=255, blank=True)
     author = models.CharField(max_length=255, blank=True)
     num_pages = models.IntegerField()
