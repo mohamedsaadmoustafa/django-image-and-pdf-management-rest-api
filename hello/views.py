@@ -97,7 +97,7 @@ class PdfDetailsView(APIView):
     def delete(self, request, pk, format=None):
         try:
             pdf = Pdf.objects.get(pk=pk)
-            pdf_path = pdf.file.path
+            # pdf_path = pdf.file.path
             pdf.delete()
 
             # # Delete the file from media storage
